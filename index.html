@@ -1,0 +1,340 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Couchcast</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@600;700;800&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+/* Layout idea: a broadcast desk. Channel dial on the left, the screen with an on-air bug
+   and lower-third in the middle, a real schedule under it, chat on the right.
+   Palette: test-card ultramarine ground, deep navy panels, tally red for "on air". */
+:root{
+  --ground:#1a2bd0;
+  --panel:#0a1040;
+  --panel-2:#101858;
+  --rule:#2c3a9e;
+  --fg:#f1f3ff;
+  --dim:#9aa6ee;
+  --tally:#ff4a1c;
+  --num:#ffd23f;
+  --f-display:"Barlow Condensed","Arial Narrow",Impact,sans-serif;
+  --f-body:"Barlow",system-ui,"Segoe UI",Arial,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--ground);color:var(--fg);font:16px/1.45 var(--f-body);min-height:100vh}
+:focus-visible{outline:3px solid var(--num);outline-offset:2px}
+
+/* ---------- top bar ---------- */
+.bars{display:flex;height:8px}
+.bars i{flex:1}
+.bars i:nth-child(1){background:#e6e6e6}.bars i:nth-child(2){background:#e5d500}
+.bars i:nth-child(3){background:#00c5c8}.bars i:nth-child(4){background:#00c400}
+.bars i:nth-child(5){background:#d300d3}.bars i:nth-child(6){background:#e10000}
+.bars i:nth-child(7){background:#0000d6}
+header{display:flex;align-items:baseline;gap:18px;padding:14px max(20px,env(safe-area-inset-left,0px)) 14px max(20px,env(safe-area-inset-right,0px));flex-wrap:wrap}
+.mark{font:800 34px/1 var(--f-display);letter-spacing:.02em;text-transform:uppercase}
+.tag{color:var(--dim);font-size:15px}
+
+/* ---------- desk ---------- */
+.desk{display:grid;grid-template-columns:230px minmax(0,1fr) 340px;gap:16px;padding:0 max(20px,env(safe-area-inset-left,0px)) 28px max(20px,env(safe-area-inset-right,0px));align-items:start}
+.dial,.guide,.chat{background:var(--panel);border-radius:4px}
+.dial{padding:6px 0}
+.dial h2,.guide h2,.chat h2{margin:0;font:700 13px/1 var(--f-display);letter-spacing:.14em;text-transform:uppercase;color:var(--dim);padding:14px 16px 10px}
+.ch{all:unset;box-sizing:border-box;display:grid;grid-template-columns:52px 1fr;column-gap:10px;align-items:center;width:100%;padding:12px 16px;cursor:pointer;border-top:1px solid var(--rule)}
+.ch:hover{background:var(--panel-2)}
+.ch[aria-pressed="true"]{background:var(--panel-2);box-shadow:inset 4px 0 0 var(--tally)}
+.ch .no{font:800 40px/1 var(--f-display);color:var(--dim)}
+.ch[aria-pressed="true"] .no{color:var(--num)}
+.ch .nm{font:700 20px/1.1 var(--f-display);text-transform:uppercase;letter-spacing:.03em}
+.ch .ct{grid-column:2;font:500 12px/1.3 var(--f-mono);color:var(--dim)}
+.ch .ct b{color:var(--fg);font-weight:500}
+
+.mid{min-width:0;display:flex;flex-direction:column;gap:14px}
+.screen{position:relative;aspect-ratio:16/9;width:100%;background:#000;border-radius:4px;overflow:hidden}
+.screen #yt,.screen iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
+.bug{position:absolute;top:14px;left:14px;display:flex;align-items:center;gap:8px;background:rgba(10,16,64,.82);padding:5px 10px 5px 8px;border-radius:2px;font:700 15px/1 var(--f-display);letter-spacing:.1em;text-transform:uppercase;pointer-events:none;z-index:2}
+.bug .lamp{width:10px;height:10px;border-radius:50%;background:var(--tally);animation:tally 2s ease-in-out infinite}
+@keyframes tally{50%{opacity:.35}}
+.bug .n{color:var(--num)}
+.l3{position:absolute;left:0;bottom:22px;max-width:78%;background:var(--panel);border-left:6px solid var(--tally);padding:10px 18px 10px 14px;transform:translateX(-105%);transition:transform .45s cubic-bezier(.2,.8,.2,1);pointer-events:none;z-index:2}
+.l3.show{transform:none}
+.l3 .k{font:700 12px/1 var(--f-display);letter-spacing:.16em;text-transform:uppercase;color:var(--num)}
+.l3 .t{font:700 26px/1.1 var(--f-display);margin-top:4px;text-transform:uppercase;letter-spacing:.01em}
+.prog{position:absolute;left:0;right:0;bottom:0;height:5px;background:rgba(255,255,255,.18);z-index:2}
+.prog i{display:block;height:100%;width:0;background:var(--tally)}
+.veil{position:absolute;inset:0;display:none;align-items:center;justify-content:center;text-align:center;padding:24px;background:rgba(10,16,64,.92);z-index:3;font:600 22px/1.3 var(--f-display);letter-spacing:.04em;text-transform:uppercase}
+.veil.on{display:flex}
+.controls{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.btn{all:unset;box-sizing:border-box;cursor:pointer;padding:9px 16px;border:2px solid var(--fg);border-radius:2px;font:700 15px/1 var(--f-display);letter-spacing:.1em;text-transform:uppercase}
+.btn:hover{background:var(--fg);color:var(--panel)}
+.btn.hot{background:var(--num);border-color:var(--num);color:#1b1500}
+.btn.hot:hover{background:#fff;border-color:#fff}
+.watching{margin-left:auto;font:500 14px/1 var(--f-mono);display:flex;align-items:center;gap:8px}
+.watching .lamp{width:8px;height:8px;border-radius:50%;background:var(--tally)}
+.watching small{color:var(--dim);font:inherit}
+
+.guide{padding-bottom:6px}
+.row{display:grid;grid-template-columns:96px 1fr auto;gap:12px;align-items:baseline;padding:11px 16px;border-top:1px solid var(--rule)}
+.row .tm{font:500 14px/1 var(--f-mono);color:var(--dim)}
+.row .ti{font:700 19px/1.15 var(--f-display);text-transform:uppercase;letter-spacing:.02em;min-width:0;overflow-wrap:anywhere}
+.row .du{font:500 13px/1 var(--f-mono);color:var(--dim)}
+.row.now{background:var(--panel-2)}
+.row.now .tm{color:var(--tally);font-weight:500}
+.row.now .tm::before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--tally);margin-right:7px}
+
+.chat{display:flex;flex-direction:column;height:calc(100vh - 80px);min-height:420px;max-height:760px;position:sticky;top:12px}
+#log{flex:1;min-height:0;overflow-y:auto;padding:4px 16px 10px;display:flex;flex-direction:column;gap:7px}
+.msg{overflow-wrap:anywhere;font-size:15px}
+.msg b{font-weight:600;margin-right:7px}
+.msg.sys{color:var(--dim);font:500 13px/1.4 var(--f-mono)}
+.msg.moment{font:500 13px/1.4 var(--f-mono);background:var(--panel-2);border-left:4px solid var(--num);padding:7px 10px}
+#chatForm{display:flex;gap:8px;padding:12px 16px;border-top:1px solid var(--rule)}
+#chatInput{flex:1;min-width:0;background:var(--ground);color:var(--fg);border:2px solid var(--rule);border-radius:2px;padding:9px 11px;font:inherit}
+#chatInput::placeholder{color:var(--dim)}
+.note{padding:0 16px 14px;font-size:12px;color:var(--dim)}
+.banner{background:var(--num);color:#1b1500;padding:9px 20px;font-weight:500;font-size:14px}
+.banner[hidden]{display:none}
+
+@media (max-width:1100px){
+  .desk{grid-template-columns:200px minmax(0,1fr)}
+  .chat{grid-column:1 / -1;position:static;height:420px;max-height:none}
+}
+@media (max-width:720px){
+  .desk{grid-template-columns:minmax(0,1fr)}
+  .dial{display:flex;overflow-x:auto;padding:0}
+  .dial h2{display:none}
+  .ch{width:auto;min-width:150px;border-top:0;border-right:1px solid var(--rule)}
+  .ch[aria-pressed="true"]{box-shadow:inset 0 -4px 0 var(--tally)}
+  .l3 .t{font-size:19px}
+  .row{grid-template-columns:78px 1fr auto}
+  .watching{margin-left:0;width:100%}
+}
+@media (prefers-reduced-motion:reduce){.bug .lamp{animation:none}.l3{transition:none}}
+</style>
+</head>
+<body>
+<div class="bars" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+<header>
+  <div class="mark">Couchcast</div>
+  <div class="tag">Everyone is watching the same thing, right now.</div>
+</header>
+<div class="banner" id="fileNotice" hidden>You opened this file straight from your computer, so YouTube may show error 153. Once the page is hosted on an https address the player will work.</div>
+
+<div class="desk">
+  <nav class="dial" aria-label="Channels"><h2>Channels</h2><div id="channels"></div></nav>
+
+  <section class="mid">
+    <div class="screen">
+      <div id="yt"></div>
+      <div class="bug"><i class="lamp"></i><span>On air</span><span class="n" id="bugNo">CH 01</span></div>
+      <div class="l3" id="l3"><div class="k">Now playing</div><div class="t" id="l3t"></div></div>
+      <div class="prog"><i id="progBar"></i></div>
+      <div class="veil" id="veil"><div id="veilText"></div></div>
+    </div>
+    <div class="controls">
+      <button class="btn" id="sound" type="button">Sound on</button>
+      <button class="btn hot" id="moment" type="button">Save moment</button>
+      <div class="watching"><i class="lamp"></i><span id="viewers">0</span><small>watching (demo number)</small></div>
+    </div>
+    <section class="guide" aria-label="Schedule">
+      <h2>On this channel</h2>
+      <div id="guideRows"></div>
+    </section>
+  </section>
+
+  <aside class="chat" aria-label="Chat">
+    <h2>Channel chat</h2>
+    <div id="log" aria-live="polite"></div>
+    <form id="chatForm">
+      <input type="text" id="chatInput" placeholder="Say something" autocomplete="off" aria-label="Message">
+      <button class="btn" type="submit">Send</button>
+    </form>
+    <div class="note">Open this page in two tabs to see chat sync between them. Other viewers and the viewer count are simulated for this demo.</div>
+  </aside>
+</div>
+
+<script>
+/* ===== Channel setup. Swap videos here. d = length in seconds (approximate is fine) ===== */
+const CHANNELS = [
+  {id:'funny', no:'01', name:'Funny', base:312, videos:[
+    {id:'jNQXAC9IAQw', t:'Me at the zoo', d:19},
+    {id:'_OBlgSz8sSM', t:'Charlie bit my finger', d:56}]},
+  {id:'music', no:'02', name:'Music', base:487, videos:[
+    {id:'9bZkp7q19f0', t:'Gangnam Style', d:252},
+    {id:'kJQP7kiw5Fk', t:'Despacito', d:282},
+    {id:'dQw4w9WgXcQ', t:'Never Gonna Give You Up', d:213}]},
+  {id:'anim', no:'03', name:'Animation', base:158, videos:[
+    {id:'aqz-KE-bpKQ', t:'Big Buck Bunny', d:634}]}
+];
+
+const $ = id => document.getElementById(id);
+let cur = CHANNELS[0], curIdx = 0, player = null, ready = false, muted = true, l3Timer = null;
+const userName = 'guest' + (100 + Math.floor(Math.random()*900));
+if (location.protocol === 'file:') $('fileNotice').hidden = false;
+
+/* ===== Shared clock: every viewer lands on the same video at the same second ===== */
+function scheduleNow(ch){
+  const total = ch.videos.reduce((s,v)=>s+v.d,0);
+  let p = (Date.now()/1000) % total;
+  for (let i=0;i<ch.videos.length;i++){
+    if (p < ch.videos[i].d) return {i, off:Math.floor(p), pos:p};
+    p -= ch.videos[i].d;
+  }
+  return {i:0, off:0, pos:0};
+}
+
+/* ===== Viewer counts (simulated until there is a server) ===== */
+function viewerCount(ch){
+  const t = Date.now()/1000;
+  return Math.max(1, Math.round(ch.base + Math.sin(t/55 + ch.base)*ch.base*0.12 + Math.sin(t/7 + ch.base*3)*6));
+}
+const nf = new Intl.NumberFormat('en-US');
+function renderCounts(){
+  CHANNELS.forEach(c => { const el = $('n-'+c.id); if (el) el.textContent = nf.format(viewerCount(c)); });
+  $('viewers').textContent = nf.format(viewerCount(cur));
+}
+
+/* ===== Channel dial ===== */
+function buildChannels(){
+  const wrap = $('channels');
+  CHANNELS.forEach(c => {
+    const b = document.createElement('button');
+    b.className = 'ch'; b.type = 'button'; b.dataset.id = c.id;
+    b.innerHTML = '<span class="no">'+c.no+'</span><span class="nm">'+c.name+'</span><span class="ct"><b id="n-'+c.id+'"></b> watching</span>';
+    b.addEventListener('click', () => { if (c !== cur) tune(c); });
+    wrap.appendChild(b);
+  });
+}
+function markActive(){
+  document.querySelectorAll('.ch').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.id === cur.id)));
+  $('bugNo').textContent = 'CH ' + cur.no;
+}
+function showVeil(msg){ $('veilText').textContent = msg; $('veil').classList.add('on'); }
+function hideVeil(){ $('veil').classList.remove('on'); }
+
+function tune(ch){
+  cur = ch; markActive(); renderCounts();
+  addSys('Switched to channel ' + ch.no + ', ' + ch.name);
+  const s = scheduleNow(ch);
+  showVideo(s.i, s.off);
+}
+function showVideo(i, off){
+  curIdx = i;
+  const v = cur.videos[i];
+  hideVeil();
+  $('l3t').textContent = v.t;
+  const l3 = $('l3'); l3.classList.add('show');
+  clearTimeout(l3Timer); l3Timer = setTimeout(() => l3.classList.remove('show'), 7000);
+  renderGuide();
+  if (ready) player.loadVideoById({videoId:v.id, startSeconds:off||0});
+}
+
+/* ===== Schedule under the screen (computed from the same clock) ===== */
+const pad = n => String(n).padStart(2,'0');
+const clock = ms => { const d = new Date(ms); return pad(d.getHours())+':'+pad(d.getMinutes()); };
+const mmss = s => { s = Math.max(0, Math.round(s)); return Math.floor(s/60)+':'+pad(s%60); };
+function renderGuide(){
+  const n = cur.videos.length, s = scheduleNow(cur);
+  let start = Date.now() - s.pos*1000 + 0, rows = '';
+  // walk from the start of the current video
+  let tMs = Date.now() - (s.pos - cur.videos.slice(0, s.i).reduce((a,v)=>a+v.d,0)) * 1000;
+  for (let k=0; k<4; k++){
+    const v = cur.videos[(s.i + k) % n];
+    rows += '<div class="row'+(k===0?' now':'')+'"><span class="tm">'+(k===0?'NOW':clock(tMs))+'</span><span class="ti"></span><span class="du">'+mmss(v.d)+'</span></div>';
+    tMs += v.d*1000;
+  }
+  const box = $('guideRows'); box.innerHTML = rows;
+  box.querySelectorAll('.ti').forEach((el, k) => { el.textContent = cur.videos[(s.i + k) % n].t; });
+}
+
+/* ===== YouTube player ===== */
+const yt = document.createElement('script');
+yt.src = 'https://www.youtube.com/iframe_api';
+document.head.appendChild(yt);
+window.onYouTubeIframeAPIReady = function(){
+  player = new YT.Player('yt', {
+    width:'100%', height:'100%',
+    playerVars:{autoplay:1, mute:1, controls:0, rel:0, playsinline:1, modestbranding:1, disablekb:1},
+    events:{
+      onReady(){ ready = true; player.mute(); const s = scheduleNow(cur); showVideo(s.i, s.off); },
+      onStateChange(e){
+        if (e.data === YT.PlayerState.ENDED){
+          const s = scheduleNow(cur);
+          if (s.i !== curIdx) showVideo(s.i, s.off); else showVideo((curIdx+1) % cur.videos.length, 0);
+        }
+      },
+      onError(){ showVeil('This video cannot be embedded. Skipping ahead.'); setTimeout(()=>showVideo((curIdx+1) % cur.videos.length, 0), 2500); }
+    }
+  });
+};
+setTimeout(() => { if (!ready) showVeil('The player did not load. Check your connection.'); }, 8000);
+
+$('sound').addEventListener('click', () => {
+  if (!ready) return;
+  muted = !muted;
+  if (muted) player.mute(); else { player.unMute(); player.setVolume(70); }
+  $('sound').textContent = muted ? 'Sound on' : 'Mute';
+});
+setInterval(() => {
+  if (!ready || !player.getCurrentTime) return;
+  const v = cur.videos[curIdx], dur = (player.getDuration && player.getDuration()) || v.d;
+  $('progBar').style.width = Math.min(100, (player.getCurrentTime()/dur)*100) + '%';
+}, 500);
+setInterval(renderGuide, 30000);
+
+/* ===== Chat ===== */
+const bc = ('BroadcastChannel' in window) ? new BroadcastChannel('couchcast') : null;
+const palette = ['#ffd23f','#7ee8fa','#ff9ecb','#9dff8a','#ffb066','#c6b3ff'];
+const colorFor = n => palette[[...n].reduce((a,c)=>a+c.charCodeAt(0),0) % palette.length];
+function line(cls, build){
+  const d = document.createElement('div'); d.className = 'msg' + (cls?' '+cls:'');
+  build(d);
+  const log = $('log'); log.appendChild(d);
+  while (log.children.length > 150) log.removeChild(log.firstChild);
+  log.scrollTop = log.scrollHeight;
+}
+function addMsg(name, text){
+  line('', d => { const b = document.createElement('b'); b.textContent = name; b.style.color = colorFor(name); d.appendChild(b); d.appendChild(document.createTextNode(text)); });
+}
+function addSys(text){ line('sys', d => { d.textContent = text; }); }
+function addMoment(text){ line('moment', d => { d.textContent = text; }); }
+
+$('chatForm').addEventListener('submit', e => {
+  e.preventDefault();
+  const v = $('chatInput').value.trim(); if (!v) return;
+  addMsg(userName, v);
+  if (bc) bc.postMessage({ch:cur.id, name:userName, text:v});
+  $('chatInput').value = '';
+});
+const mmssT = s => pad(Math.floor(s/60)) + ':' + pad(Math.floor(s%60));
+$('moment').addEventListener('click', () => {
+  const t = ready && player.getCurrentTime ? player.getCurrentTime() : 0;
+  const text = '★ ' + userName + ' saved ' + mmssT(t) + ' in "' + cur.videos[curIdx].t + '"';
+  addMoment(text);
+  if (bc) bc.postMessage({ch:cur.id, moment:true, text:text});
+});
+if (bc) bc.onmessage = e => {
+  const m = e.data; if (!m || m.ch !== cur.id) return;
+  if (m.moment) addMoment(m.text); else addMsg(m.name, m.text);
+};
+
+/* simulated viewers so the chat feels alive (labelled as demo on the page) */
+const botNames = ['maya','dorian','tess','kofi','ines','rafa','june','omar'];
+const botLines = ['lmaooo','this one is a classic','who else is here','turn it up','saved that moment','been waiting for this','still funny every time','next one please','this channel is it','no way'];
+(function bot(){
+  addMsg(botNames[Math.floor(Math.random()*botNames.length)], botLines[Math.floor(Math.random()*botLines.length)]);
+  setTimeout(bot, 3500 + Math.random()*5000);
+})();
+
+buildChannels(); markActive(); renderCounts(); renderGuide();
+addSys('Welcome to channel ' + cur.no + ', ' + cur.name);
+setInterval(renderCounts, 4000);
+</script>
+</body>
+</html>
